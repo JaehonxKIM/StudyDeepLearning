@@ -100,29 +100,270 @@ import matplotlib.pyplot as plt
 m = [random.random() for n in range(1000)]
 print(m)
 
-# 다중 슬롯 머신의 ARM을 구현, 모든 ARM은 같은 형태를 취한다.
+# 다중 슬롯 머신의 ARM을 구현, 모든 ARM은 같은 형태를 취한다
 # ARM은 보상을 주는 확률을 각각 고유하게 가지고 있다
-class SlotArm() :
-  # 생성자
-  def __init__(self, p) :
+class SlotArm:
+  # 멤버변수를 사용하기 전에 반드시 멤버변수가 생성 혹은 초기화 되어야 한다
+  p = None
+  # 생성자 -> 객체를 생성할때 호출, 이름은 고정 ( __init__ )
+  # 생성자 재정의(override)
+  def __init__( self, p ):
+    # 멤버변수를 생성자 내부에서 생성 한것이다
     self.p = p
-    pass
-  # 멤버변수
+    #pass
+  
   # 멤버함수
-  def reward(self) :
-    if self.p > random.random() :
+  def reward2( self ):
+    return 1.0 if self.p > random.random() else 0.0
+    #return self.p > random.random() and 1.0 or 0.0 # 조건에 따라 안될 수 있으므로 가급적 배제
+    #pass
+  def reward( self ):
+    # 특정 확률 이하로 랜덤값이 나오면 보상 지급 => ~ if ~ else  /  ~ and ~ or ~
+    # 조건이 2개, 값을 리턴하는 스타일=> 삼항연산자 방식(공식적으로는 파이썬에는 없음) 사용가능
+    # 변수 = 참일때값 if 조건 else 거짓일때값
+    # 변수 = 조건 and 참일때값 or 거짓일때값
+    # random.random() => 이 값의 정규분포가 적절한가? (여기서는 미고려)
+    if self.p > random.random():
       return 1.0
-    else :
+    else:
       return 0.0
-  #   pass
-  # pass
+    #pass
+  #pass
 
-# 확률 50%로 보상을 주는 ARM을 만들어라
-SlotArm(0.5)
-SlotArm(0.1)
-SlotArm(0.3)
+# 확률 50% 로 보상을 주는 ARM 을 만들어라
+SlotArm( 0.5 )
+SlotArm( 0.1 )
+sa = SlotArm( 0.3 )
+
+class SlotArm:
+  '''
+  __init__(self.p), p는 확률(0.0 <= x <= 1.0)
+  reward(self)는 p 확률 이하로 보상을 지급(1.0), 미지급(0.0)
+  '''
+  def __init__( self, p ):
+    self.p = p
+
+  def reward( self ):
+    if self.p > random.random():
+      return 1.0
+    else:
+      return 0.0
+
+"""# GameEngine
+
+- 객체 지향 프로그램의 상속성을 활용하여, 2개의 알고리즘을 동일한 인터페이스 형태로 구현하려고 한다
+- 테스트 코드는 for문에서 동일한 함수를 호츌하는것으로 비교할 수 있다
+"""
+
+class GameEngine() :
+  # 알고리즘 초기화
+  def initialize(self) : pass
+  # 팔을 당긴다
+  def pull_arm(self) : pass
+  # 보상 업데이트
+  def update_value(self) : pass 
+  # 알고리즘 정보
+  def get_engine_info(self) : pass
+
+"""## EpsilonGreedyEngine"""
+
+from IPython.display import Image
+Image('/content/drive/MyDrive/ComputerProgramming/DeepLearning/rl/ε-greedy.jpeg')
+# 가치를 계산하는 식
+# 현재시점의행동의가치 = (처음부터 직전까지 시도한 횟수 / 전체 시행횟수) * 이전행동까지의 가치 +
+#                        (1 / 전체시행횟수) * (이번 행동으로 얻는 보상)
+
+"""- EpsilonGreedyEngine 알고리즘(ε-greedy)
+  - 확률 ε로 랜덤하게 행동을 선택한다
+    - ε(0~1) or 1-ε 를 기준으로 랜덤하게 행동을 선택
+    - 에이전트가 ARM을 선택하는 행위
+  - 통상적으로 0,1을 사용할 경우 가장 높은 성능을 낸다
+  - 탐색과 이용에 대한 상충관계 처리를 해야한다
+    - 균형
+    - 탐색 : ε로 배치
+    - 이용 : 1- ε로 배치
+    - 어떤 ARM을 선택하는가?
+"""
+
+class EpsilonGreedyEngine(GameEngine) :
+  '''
+    ε-greedy를 이용한 ARM 선택 엔진
+    epsilon 값은 기본값 0.1을 사용
+  '''
+  def __init__(self, _epsilon = 0.1) : # 생성자
+    self.epsilon = _epsilon
+    pass
+  def initialize(self, count_arms) :   # 알고리즘 초기화
+  # 멤버가 모두 0인 배열을 생성
+  # 특정 ARM이 몇번 선택되었는지를 기록하는 배열이다
+  # self.n의 총합은 ARM을 선택한 총 횟수, 총 에피소드의 합, 전체 플레이 횟수
+    self.n = np.zeros(count_arms)
+  # 각 ARM에 대한 보상값 기록
+    self.v = np.zeros(count_arms)
+
+  def pull_arm(self) : # 팔을 당긴다
+    if self.epsilon > random.random() : # ex) 10% 확률 -> 탐색
+      return np.random.randint(0, len(self.n)) # 0 or 1 or 2 or 3
+    else : # ex) 90% 확률 -> 이용 -> 각 팔들 중에서 보상값이 가장 높은 ARM
+      return np.argmax(self.v)
+  # 보상 업데이트 -> 특정 ARM에 대해 가치 업데이트, 선택횟수 증가
+  # 시뮬레이션 진행 => arm 선택 => 보상이 리턴 => 이 정보를 넣어서 아래 함수 호출
+  # arm 1번 10회, arm 2번 20회, ....
+  # 각 arm별로 가치는 달라진다 가치 계산도 arm별로 진행
+  def update_value(self, choice_arm, reward) :
+    # 1. 특정 arm 선택 횟수 증가 
+    self.n[choice_arm] += 1
+    # 2. 특정 arm의 가치 계산
+    n = self.n[choice_arm]
+    v = self.v[choice_arm]
+    self.v[choice_arm] = ((n-1) / n) * v + (1 / n) * (reward)
+    pass 
+  
+  def get_engine_info(self) : # 알고리즘 정보
+    return 'ε-greedy를 이용한 ARM 선택 엔진'
+    pass 
+
+EpsilonGreedyEngine()
+EpsilonGreedyEngine(0.2)
+EpsilonGreedyEngine(_epsilon = 0.3)
+
+# 구성원이 4개인 1차원 배열 생성, 기본값은 0
+np.zeros(4)
+
+tmp = np.array([ 1,2,3,4])
+tmp
+
+# tmp에서 가장 큰값(보상, VALUE)을 가진 위치값(인덱스)
+# 구성원들 중에서 가장 높은 값을 가진 구성원의 인덱스를 리턴
+np.argmax(tmp)
+
+"""## UCB1Engine
+
+- 원리
+  - 모든 팔을 한번씩 혹은 한 번 이상 사용할 때까지 가치 계산 갱신을 하지 않는다 => 전체 ARM 탐색
+  - 만약, 모든 arm이 1회 이상 선택되었다면, arm의 가치 갱신 시작한다
+"""
+
+Image('/content/drive/MyDrive/ComputerProgramming/DeepLearning/rl/UCB1.jpeg')
+# 제곱만 보거나 1/2 제곱만 살펴본다 (그림 오류)
+# 성공률 + 바이어스(bais, 평행값, 미세조정)
+# ARM을 하나 선택하면 모든 ARM의 가치를 재조정한다(t값 때문에)
+
+# UCB1Engine 기본틀 작업 구현
+class UCB1Engine(GameEngine) :
+  # 알고리즘 초기화
+  def initialize(self, count_arms) :
+    # 각 ARM의 실행횟수
+    self.n = np.zeros(count_arms)
+    self.v = np.zeros(count_arms)
+    # 각 ARM의 보상을 받은 횟수를 담은 배열 
+    self.w = np.zeros(count_arms)   
+    pass
+  # 팔을 당긴다 => 어떤 arm을 당길것인가 => arm의 인덱스를 리턴
+  def pull_arm(self) :
+    # 모든 ARM을 당길때까지 -> 계속 탐색 => 미선택 ARM이 있으면 리턴
+    for i in range(len(self.n)) :
+      # 한번도 선택되지 않은 ARM
+      if not self.n[i] :
+        return i
+    # 만약 모든 ARM이 선택 되었다면 -> 이용 => 가치가 가장 높은 ARM 선택
+    return np.argmax(self.v)   
+    pass
+  # 보상 업데이트
+  def update_value(self, choice_arm, reward) :
+    self.n[choice_arm] += 1
+    # 보상을 받은 횟수 증가
+    if reward :
+      self.w[choice_arm] += 1
+      # 3. 모든 arm이 최소 1번씩은 선택되었는가
+      for i in range(len(self.n)) :
+      # 한번도 선택되지 않은 ARM
+        if not self.n[i] :
+          return # 아직 선택 안한 ARM이 있다 -> 가치 계산 안함
+      # 4. 가치 계산 => 가치 갱신 => 모든 ARM을 계산
+      for i in range(len(self.n)) :
+        # 성공률 => win
+        suc_rate = self.n[i] / self.n[i]
+        # 편향, 바이어스 => (2 * log(t) / n)^1/2
+        t = self.n.sum() # 모든 ARM들 계산
+        bais =  (2 * math.log(t) / self.n[i])**0.5
+        self.v[choice_arm] = suc_rate + bais
+
+    pass
+  # 알고리즘 정보
+  def get_engine_info(self) :    
+    return 'UCB1을 이용한 ARM 선택 엔진'
+    pass
+  
+UCB1Engine()
+
+"""# 시뮬레이션"""
+
+def play(engine, slot_arms, sim_cnt, epi_cnt) :
+  #  총 시도횟수
+  times = np.zeros(sim_cnt * epi_cnt)
+  # 보상
+  rewards = np.zeros(sim_cnt * epi_cnt)
+  #  시뮬레이션 진행
+  for sidx in range(sim_cnt) :     # 0 ~ sim_cnt - 1
+     # 게임 엔진 초기화 -> 250회 ARM 선택 -> 종료 -> 총 1000번 수행
+     # arm의 총 개수를 넣어서 엔진 초기화
+     engine.initialize(len(slot_arms)) 
+     for step in range(epi_cnt) :
+       # 0. 시도 횟수를 기록한다  => times => [1,2,3,...,250,1,2,3...,250,1,2,....250]
+       offset = epi_cnt * sidx
+       index = offset + step
+       times[offset] = step + 1
+       # 1. ARM을 당긴다
+       cur_arm_index = engine.pull_arm()
+       # 2. 가치를 계산한다
+       reward = slot_arms[cur_arm_index].reward()
+       # 3. 계산된 가치를 저장한다 -> rewards
+       rewards[index] = reward
+       # 4. 가치 업데이트
+       engine.update_value(cur_arm_index, reward)
+       pass
+     pass
 
 
 
+  return times, rewards
+  pass
 
+# 전체 시뮬레이션 횟수
+SIMULATION_COUNT = 1000
+# 에피소드 횟수 (시뮬레이션 1회당 250회 )
+EPISODE_COUNT    = 250
 
+# 게임 구성
+slot_arms = [
+  SlotArm(0.3),             
+  SlotArm(0.5),
+  SlotArm(0.9),
+]
+engines    = [
+  EpsilonGreedyEngine(),
+  UCB1Engine()
+]
+
+# 시뮬레이션 진행
+for engine in engines:
+  # 1. 시뮬레이션 
+  times, rewards = play( engine, slot_arms, SIMULATION_COUNT, EPISODE_COUNT )
+  # 2. 결과를 가지고 시각화 -> 모니터링 (X축 시도횟수, y축을 보상)
+  df = pd.DataFrame( {
+      'times':times,
+      'rewards':rewards
+  } )
+  # 3. times(1~250)를 그룹화하여 평균으로  조정하여 시각화
+  tmp = df.groupby( 'times' ).mean()
+  # 4. 시각화
+  plt.plot( tmp, label = engine.get_engine_info() )
+
+# 데코
+plt.xlabel('Episode')
+plt.ylabel('Reward')
+plt.legend()
+
+# 출력
+plt.show()
