@@ -48,3 +48,25 @@
     - 벨만 방정식이 성립하기 위한 환경은 MDP이여야 한다 -> 다음 상태가 현재 상태에서 선택한 행동에 따라 확정되는 시스템
 - Q-Learning & Sarsa
 
+## 4일차
+- Q-Learning, Sarsa 시뮬레이션
+- 행동가치함수 통합 -> 클로저(함수 안에 함수)
+- 가치계산법 적용
+    - Sarsa & Q-Learning
+- 딥러닝 개요
+    - 개발환경 -> GPU, CPU, TPU
+- 엔진
+    - Tensorflow
+    - Pytorch
+    - Keras
+- 인공신경망
+    - CNN
+        - YOLO, Fast CNN, Mediapipe, opencv
+    - RNN
+        - 자연어처리, 시계열분야, 
+    - 구성
+        - one - to - many => 이미지를 보고 텍스트 생성(출력)
+        - many - to - one => 감정분석, 스팸메일 분류
+        - many - to - many => 기계 번역, 챗봇
+    - GAN 
+
