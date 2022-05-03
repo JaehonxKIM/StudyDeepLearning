@@ -120,7 +120,9 @@ CNN Network
 
 ### PART1 데이터 플로우 그래프 구성
 
-#### 입력층
+#### 합성곱 인공 신경망 구축
+
+##### 입력층
 
 - 변수명 : x
 - 목적 : 손글씨 이미지 데이터가 주입된다(외부에서 데이터를 넣는다) -> 학습하기 위해서 
@@ -136,7 +138,7 @@ CNN Network
 x = tf.placeholder(tf.float32, shape = (None, PIXEL), name = 'x')
 x
 
-"""#### 은닉층 > 합성곱층 1F
+"""##### 은닉층 > 합성곱층 1F
 
 - 목적
   - 이미지 상의 공간 / 인접 등 정보(특징)을 추출하는 단계
@@ -174,23 +176,355 @@ x
   - W(or k) : (5, 5) <- 설정
   - b : (32,) <- 설정
   - 1장의 이미지를 넣어서 => 32개의 이미지로 추출
+"""
 
-#### 은닉층 > 풀링층 1F
+# 함수를 이용하여 가중치 W를 가진 필터(커널)을 생성하는 함수를 제작
+def createFilterByWeight( name, shape ):
+  '''
+    name  : 가중치값을 가진 커널의 이름
+    shape : 커널을 만들때 외부에서 입력받겠다
+            shape값의 크기를 가진 텐서(행렬)을 만들어서 특정값이 세팅된다
 
-#### 은닉층 > 합성곱층 2F
+  '''
+  name = f'{name}_W'
+  # 가중치 초기값
+  # 필터의 특성에 따라, 특정 정보를 추출하는 W를 입력해도 되고,(수직,수평,..)
+  # 기존 함수들을 활용해서(정규분포값 고려한,..) 구성할수도 있고, 랜덤하게 세팅할수도 있다
+  # truncated_normal() 값에 대해서는 신경쓰지 않는다(예시 설정)
+  initial_value = tf.truncated_normal( shape, stddev=0.1 )
+  # 가중치는 학습 과정을 통해서 계속적으로 수정되므로 => 변수로 설정
+  W = tf.Variable( initial_value=initial_value,  name=name )
+  return W
 
-#### 은닉층 > 풀링층 2F
+createFilterByWeight( 'conv_1f', (5,5) )
 
-#### 은닉층 > 전결합층
+# 편향값 생성 함수
+def createBias(name, shape, value) :
+  '''
+    name  : 이름
+    shape : 모양
+    value : 초기값
 
-#### 은닉층 > 드롭아웃층
+  '''
+  name = f'{name}_b'
+  # x * W + b
+  initial_value = tf.constant( value, shape = shape )
 
-#### 출력층
+  W = tf.Variable( initial_value=initial_value, name=name )
+  return W
 
-### PART2 데이터 주입 및 학습 및 예측수행
+createBias( 'conv_1f', (32,), 1.0)
+
+# 합성곱층 생성 함수
+def createConv2D(name, x, W) :
+  '''
+    x -> input : data_format을 따르는 구조로 4-D 텐서 -> NHWC
+          (
+            총 데이터 수,      : batch
+            이미지 1개의 높이, : in_height
+            이미지 1개의 너비, : in_width
+            이미지 채널 수     : in_channel
+          )
+          ex) (None, PIXEL) -> 형변환필요 => (None, PIXEL_H, PIXEL_W, 1)
+          ex) (None, 784) -> 형변환필요 => (None, 28, 28, 1)
+    filter : A 4-D tensor of shape, 거즁차 값을 가진 커널(이미지 특징을 뽑는 역할)
+          [
+              filter_height : 커널의 세로 크기
+              filter_width  : 커널의 가로 크기
+              in_channels   : 입력 채널 수 : 최초는 1 -> 이미지 원본이 grayscale이므로
+              out_channels  : 설정값, 32라고 넣는다면 이미지 1장에 채널이 1개
+                              => 이미지 1장이 32채널로 확장 -> 이미지 1장 32장으로 부풀렸다
+          ]
+  strides : 커널의 이동량, 정수나 리스트로 표현, 크기는 1, 2, 4 형태를 가진다
+            [
+             batch : 통상 1, batch는 depth와 동일 역할은 고려하지 않는다
+             h     : 1 => 수직방향으로 이동하는 량
+             w     : 1 => 수평방향으로 이동하는 량
+             depth : 통상 1
+            ]
+  padding  : 보정, 'SAME' => 피쳐맵이 동이한 크기를 가진다 or "VALID" 피쳐맵이 줄어든다
+             단, 이동량(stride)이 1일 때
+  use_cudnn_on_gpu=True,
+  data_format='NHWC'  : "NHWC", "NCHW" N: 총 데이터수, H : 이미지 1개의 높이,
+                        W : 이미지 1개의 너비, C : 입력이미지의 입력채널 수(그레이스케일:1, 칼라이미지:3)
+  '''
+  name = f'{name}_conv'
+  # stride은 내부 고정
+  # padding = 'SAME' : 설정값
+  # 아래 설정대로 합성곱을 통과하면 이미지의 크기는 원본과 동일하다
+  return tf.nn.conv2d(x, filter = W, strides = [1, 1, 1, 1], padding = 'SAME')
+  pass
+
+# 합성곱층 생성
+# 1. 커널 준비
+conv_1f_W = createFilterByWeight( '1f_conv', (5, 5, 1, 32) )
+print( conv_1f_W )
+# 2. 편향값 준비
+# 퍼셉트론에 의하면 => y = xW + b
+# 커널의 출력채널값을 1차원에 shape으로 넣으면 식은 성립한다 -> 브로드케스팅을 이해
+# 1.0 설정값 => 학습과정을 통해 조정된다
+conv_1f_b = createBias( '1f_conv', (32,), value=1.0  )
+print( conv_1f_b )
+# 3. 입력데이터 준비
+# -1 => 알아서 계산해 달라, 모르겟다
+x_4d = tf.reshape( x, ( -1, PIXEL_H, PIXEL_W, 1 ) )
+print( x_4d )
+# 4. 합성곱층 생성
+# xW + b
+conv_1f = createConv2D( '1f', x_4d, conv_1f_W ) + conv_1f_b
+# 여기까지가 feature map
+# (55000, 28, 28, 1) => (55000, 28, 28, 32)
+# 5. 활성화 함수 통과 (활성화 함수 의미는 나중에 체크)
+# 전체 데이터 값이 조정
+act_conv_1f = tf.nn.relu( conv_1f )
+
+# 합성곱층 1층의 최종 출력
+act_conv_1f
+
+"""##### 은닉층 > 풀링층 1F
+
+- 입력 : act_conv_1f
+- 변수명 : pool_1f
+- 목적 : 특징을 강화한다
+  - **최대** 풀링, **평균** 풀링
+- 구성요소
+  - k : 크기, shape만 필요
+  - W : 필요 없다. 커널과 이미지 원본이 겹치는 구간에서는 오직 최대값을 뽑거나 평균을 뽑는 행위만 수행
+  - s : 이동량
+  - p : 'SAME' of 'VALID'
+- shape 
+  - act_conv_1f : (?, 28, 28, 32)
+  - k : (1,**2,2**,1) -> 세로 가로 2칸 크기
+  - s : (1,2,2,1) -> 2칸씩 이동
+  - p : SAME
+  - 출력 : (?, 14. 14, 32)
+"""
+
+# 최대 풀링 함수
+def createMaxPooling( name, x ):
+  '''
+    name : 이름
+    x : 입력
+    s, p는 고정(설정값)
+
+    ksize [
+      batch,
+      h,
+      w,
+      in_channels
+    ]
+  '''
+  # ksize=[1, 2, 2, 1] => 1개의 이미지에 대해서 1개의 채널이 나오도록 위치 설정
+  # 통상적으로 앞뒤는 1로 세팅하고 가운데 h, w만 지정하여 커널의 크기를 설정한다
+  return tf.nn.max_pool( x, ksize=[1,2,2,1], strides=[1,2,2,1], 
+                         padding='SAME', name=f'{name}_max')
+
+pool_1f = createMaxPooling( 'pooling_1f',  act_conv_1f)
+pool_1f
+
+"""##### 은닉층 > 합성곱층 2F
+
+- 입력 
+  - pool_1f : (? , 14, 14, 32 )
+- 출력
+  - act_conv_2f : (?, 14, 14, 32*2)
+  - 출력채널을 1f에 비해 2배로 증가시켰다
+"""
+
+conv_2f_W   = createFilterByWeight( '2f_conv', (5, 5, 32, 32*2) )
+conv_2f_b   = createBias( '2f_conv', (32*2,), value=0.1  )
+conv_2f     = createConv2D( '2f', pool_1f, conv_2f_W ) + conv_2f_b
+act_conv_2f = tf.nn.relu( conv_2f )
+act_conv_2f
+
+"""##### 은닉층 > 풀링층 2F
+
+- 입력
+  - act_conv_2f : (?, 14, 14, 32*2)
+- 출력
+  - pool_2f : (?, 7, 7, 32*2)
+"""
+
+pool_2f = createMaxPooling( 'pooling_2f',  act_conv_2f)
+pool_2f
+
+"""##### 은닉층 > 전결합층
+
+- 최종결과에 수렴하기 위해 현재 데이터량을 체크
+  - 이미지 1개는 7 * 7 * 64(*3136) 정도의 픽셀로 표현되고 있다
+  - 이 데이터를 바로 28 * 28 * 1 로 수렴하면 데이터 손실이 불가피하다
+- 목적
+  - 출력층으로 가기 전에 완충지대를 생성
+  - Flattern 처리, 4D -> 2D로 만들어서 1차 수렴을 진행
+  - (?, 1024) : 1024는 설정값
+  - 3136 -> 1024 -> 784 수렴하는 과정
+
+- 구성
+  - 입력
+    - pool_2f : (?, 7, 7, 32*2)
+  - 출력
+    - act_fc  : (?, 1024)
+"""
+
+# 순수하게 직접 구현 y = xW + b
+# 1. 입력 shape 조정
+# (?, 7, 7, 32*2) -> (?, 7 * 7 * 32*2)
+_, h, w, ch = pool_2f.shape
+in_channels = h * w * ch
+out_channels = 1024
+x      = tf.reshape( pool_2f, ( -1, in_channels ) )
+
+# ex) ( 2, 5)*(5, 3) => (2, 3)
+# 2. 가중치 (7*7*32*2, 1024)
+fc_W = createFilterByWeight('fc', (in_channels, out_channels))
+
+# 3. 편향 (1024, )
+fc_b = createBias('fc', (out_channels, ), 0.1)
+
+# 4. fc => (?, 7 * 7 * 32*2) * (7*7*32*2, 1024) + (1024,) => (?, 1024)
+fc     = tf.matmul(x, fc_W) + fc_b
+
+# 5. 활성화 함수
+act_fc = tf.nn.relu(fc)
+act_fc
+
+"""##### 은닉층 > 드롭아웃층
+
+- CNN과 상관없이 과적합 방지층으로 추가
+- 특정 데이터에 길들여지는, 편향성을 가지는 것을 방지
+- 원리
+  - 특정 비율로 신경망을 방해하여 학습 행위를 방해 -> 학습효율을 떨어뜨린다
+- 입력
+  - act_fc : (?, 1024)
+- 출력
+  - act_fc_dropout : (?, 1024)
+- 외부에서 학습 방해율 혹은 학습률을 주입해서 방해 진행
+  - placeholer 진행
+    - float
+"""
+
+keep_prob = tf.placeholder(tf.float32)
+act_fc_dropout = tf.nn.dropout(act_fc, rate = 1- keep_prob)
+act_fc_dropout
+
+"""##### 출력층
+
+- 목적
+  - 입력 데이터 x가 0 ~ 9 까지 특정값에 **수렴**하도록 처리
+    - 이미지를 넣어서 예측을 하면 이 이미지는 x% 확률로 숫자 3으로 예측된다
+
+- 입력
+  - act_fc_dropout : (?, 1024)
+- 출력
+  - y_conv : (?, 10)
+- 활성화 함수
+  - softmax()사용
+  - 특정 테이터 x가 특정값 y로 예측되는 확률 계산
+"""
+
+_, in_ch = act_fc_dropout.shape
+# 가중치를 공용파라미터로 가진 필터
+y_W = createFilterByWeight('output', (in_ch, LABEL_NUM))
+
+# 편향값
+y_b = createBias('output', (LABEL_NUM, ), 0.1)
+
+# 출력층 => (?, 1024)*(? , 10) + (10, ) => (?, 10)
+y_conv = tf.matmul(act_fc_dropout, y_W) + y_b
+
+# 활성화 함수 통과 -> 예측 확률값을 얻게 처리함
+y_conv = tf.nn.softmax(y_conv)
+y_conv
+
+"""- x -> .... -> y_conv 수렴하는 신경망을 구성(플로우 구성), 순전파(x->y) 네트워크 구성
+
+#### 학습, 최적화 등등 연산에 대한 플로우 구성
+
+##### 데이터 주입을 위한 준비
+
+- x    : 훈련데이터, 테스트 데이터 
+- rate : 학습 방해비율 혹은 학습비율
+- y_   : 실제 정답
+"""
+
+# 실제 정답을 주입받을 그릇 준비
+# (?, 10)
+y_ = tf.placeholder(tf.float32, shape = (None, LABEL_NUM), name = 'y_')
+y_
+
+"""##### 손실함수-평가/최적화의 지표
+
+- 평가도구로서 손실함수를 사용하겠다
+- 학습을 조기에 종료(조기학습종료) 판단기준
+- 정답과 예측값 사이의 오차를 계산
+  - **크로스엔트로피 사용**
+"""
+
+from IPython.core.display import Image
+Image('/content/drive/MyDrive/ComputerProgramming/DeepLearning/2.딥러닝/dl/크로스엔트로피계산.png')
+# 의미 : 실제 데이터의 확률분포와 모델이 예측한 결과에 대한 확률분포간의 차이를 구분할 때 사용
+# - 총합(실제정답 * log(예측값)) => 이 값이 0에 수렴하도록 최적화 하는것이 이 지표의 목표
+
+# 손실함수 구현
+# y_conv : 예측값 (?, 10)
+# y_     : 실제 정답 (?, 10)
+cross_entropy = tf.reduce_sum(y_* tf.log( y_conv ))
+
+"""##### 최적화도구 설정
+
+- 학습 계수 : W, b를 조정하는 알고리즘
+- 알고리즘
+  - 경사 하강법(SGD), Adam, AdaGrad, FMSProp, Momentum,..
+- 목표
+  - 손실값(지표, 판단기준)을 최소로 나오게끔(0에 가깝게 수렴), 네트워크 상에 존재하는 W, b를 최적화한다(미세조정한다)
+"""
+
+# 최적화 도구 생성
+opitimizer = tf.train.AdamOptimizer()
+# 훈련도구 생성 ( 최적화 -> 손실함수 -> 실제값, 예측값 -> .. -> x 연결)
+train = opitimizer.minimize(cross_entropy)
+
+"""##### 역전파(생략)
+
+- y -> x로 데이터가 거꾸로 이동해서 도달할 수 있는가?
+- 중간에 막혔다면 w,b를 미세조정해서 x까지 도달하게 처리
+
+##### 예측및 평가
+"""
+
+# 예측
+predict = tf.equal(tf.arg_max(y_conv, 1), tf.arg_max(y_, 1))
+# predict => True, False
+
+# 정확도
+
+# tf.cast() -> 1, 0
+accuracy = tf.reduce_mean(tf.cast(predict, tf.float32))
+accuracy
+
+"""### PART2 데이터 주입 및 학습 및 예측수행
 
 - 데이터 주입 형태
   - feed_dict = {x : (?, 784)}
+
+- 학습
+  - 일반적 분류
+  - 종류
+    - 오프라인 학습
+      - 시스템 셧다운후 모델 업데이트 진행
+        - 자율주행 모듈 FSD 업데이트
+    - 온란인 학습
+      - 실시간 모델 업데이트
+  - 데이터량
+    - 배치학습
+      - GPU 메모리를 워크스테이션의 사양이 커버되면 데이터를 한번에 학습
+    - 미니배치학습
+      - 전체 데이터를 쪼개서(배치사이즈) 여러차례 학습을 수행하여 전체데이터를 전부 학습시킨다 -> 자원이 한정적이어서
+  - 방식
+    - 전이학습
+      - 이미 잘 만들어진 모델을 가져와서 그 신경망의 구조와 W, b를 그대로 사용 혹은 파인튜닝(기법) 등을 거쳐서 발전 응용하여 새로운 모델을 생성할 수도 있다
+
+- 다음 장에서 계속
 
 # 시스템 통합 / 산출물
 """
