@@ -98,3 +98,12 @@
 ## 8일차 
     - 7일차 학습내용과 비슷함 => 파이토치를 이용한 cnn
 
+## 9일차
+    - 활성화함수
+        - sigmoid, tanh, Relu, Leaky Relu, P Relu, ELU, Maxout, softmax
+    - 자연어처리 단어임베딩 긍정 or 부정 예측
+        - 인터넷 기사, 댓글
+        - 한글의 처리 어려움
+        - 원-핫인코딩, 패딩
+        - MeCab 사용
+
